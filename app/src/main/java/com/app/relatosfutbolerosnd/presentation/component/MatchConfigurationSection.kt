@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 fun MatchConfigurationSection(
     team1: String,
     team2: String,
+    team1Error: String?,
+    team2Error: String?,
     onTeam1Change: (String) -> Unit,
     onTeam2Change: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -68,7 +70,9 @@ fun MatchConfigurationSection(
                     onValueChange = onTeam1Change,
                     label = { Text("Equipo Local") },
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
+                    isError = team1Error != null,
+                    supportingText = { if (team1Error != null) {Text(team1Error)}}
                 )
 
                 Spacer(modifier = Modifier.width(16.dp))
@@ -88,7 +92,9 @@ fun MatchConfigurationSection(
                     onValueChange = onTeam2Change,
                     label = { Text("Equipo Visitante") },
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
+                    isError = team2Error != null,
+                    supportingText = { if(team2Error != null) {Text(team2Error)}}
                 )
             }
 

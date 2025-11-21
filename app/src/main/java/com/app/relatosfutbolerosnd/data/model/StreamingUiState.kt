@@ -20,5 +20,10 @@ data class StreamingUiState(
 
     // Estados de carga/error
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+
+    // CAMPOS PARA VALIDACIÓN DE ERRORES
+    val team1Error: String? = null,
+    val team2Error: String? = null,
+    val streamUrlError: String? = null
 )

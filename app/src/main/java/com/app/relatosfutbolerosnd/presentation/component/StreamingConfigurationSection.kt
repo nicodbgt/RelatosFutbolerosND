@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun StreamingConfigurationSection(
     streamUrl: String,
+    streamUrlError:String?,
     onStreamUrlChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -62,7 +63,9 @@ fun StreamingConfigurationSection(
                 label = { Text("URL RTMP YouTube") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                placeholder = { Text("rtmp://a.rtmp.youtube.com/live2/tu-clave") }
+                placeholder = { Text("rtmp://a.rtmp.youtube.com/live2/tu-clave") },
+                isError  = streamUrlError != null,
+                supportingText = { if(streamUrlError != null) Text (streamUrlError, color= MaterialTheme.colorScheme.error)}
             )
 
             // Tips

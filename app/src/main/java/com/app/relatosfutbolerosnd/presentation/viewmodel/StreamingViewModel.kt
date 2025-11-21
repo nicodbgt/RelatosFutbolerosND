@@ -35,19 +35,49 @@ class StreamingViewModel @Inject constructor(
 
     // 🎯 ACTUALIZACIONES DE CONFIGURACIÓN
     fun updateTeam1(name: String) {
-        _uiState.update { it.copy(team1Name = name) }
+        _uiState.update { it.copy(team1Name = name, team1Error = null) }
     }
 
     fun updateTeam2(name: String) {
-        _uiState.update { it.copy(team2Name = name) }
+        _uiState.update { it.copy(team2Name = name, team2Error = null) }
     }
 
     fun updateStreamUrl(url: String) {
-        _uiState.update { it.copy(streamUrl = url) }
+        _uiState.update { it.copy(streamUrl = url, streamUrlError = null) }
     }
 
     // 📹 CONTROL DE STREAMING
     fun startStreaming() {
+        val state = _uiState.value
+        var hasError = false
+
+        // 1. Validar Equipo 1
+        val team1Error = if (state.team1Name.isBlank()) "Ingresa el nombre del equipo" else null
+        if (team1Error != null) hasError = true
+
+        // 2. Validar Equipo 2
+        val team2Error = if (state.team2Name.isBlank()) "Ingresa el nombre del equipo" else null
+        if (team2Error != null) hasError = true
+
+        // 3. Validar URL
+        val urlError = if (state.streamUrl.isBlank()) {
+            "La URL es obligatoria"
+        } else if (!state.streamUrl.startsWith("rtmp://") && !state.streamUrl.startsWith("rtmps://")) {
+            "La URL debe comenzar con rtmp:// o rtmps://"
+        } else {
+            null
+        }
+        if (urlError != null) hasError = true
+
+        // Si hay errores, actualizamos el estado y CANCELAMOS el inicio
+        if (hasError) {
+            _uiState.update { it.copy(
+                team1Error = team1Error,
+                team2Error = team2Error,
+                streamUrlError = urlError
+            )}
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 

@@ -71,6 +71,8 @@ fun MainScreen(
             MatchConfigurationSection(
                 team1 = state.team1Name,
                 team2 = state.team2Name,
+                team1Error = state.team1Error,
+                team2Error = state.team2Error,
                 onTeam1Change = viewModel::updateTeam1,
                 onTeam2Change = viewModel::updateTeam2,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -78,6 +80,7 @@ fun MainScreen(
 
             StreamingConfigurationSection(
                 streamUrl = state.streamUrl,
+                streamUrlError = state.streamUrlError,
                 onStreamUrlChange = viewModel::updateStreamUrl,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
