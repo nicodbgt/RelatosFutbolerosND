@@ -28,8 +28,12 @@ class RtmpClient @Inject constructor(
     private lateinit var surfaceView: HkSurfaceView
 
     private var listener: Listener? = null
+    private var isInitialize = false
 
     fun initialize(surfaceView: HkSurfaceView, listener: Listener) {
+
+        if(isInitialize) return
+
         this.surfaceView = surfaceView
         this.listener = listener
 
@@ -47,8 +51,11 @@ class RtmpClient @Inject constructor(
         stream.attachVideo(videoSource)
         connection.addEventListener(Event.RTMP_STATUS, this)
         surfaceView.attachStream(stream)
+        isInitialize = true
     }
-
+    fun updateListeener(newListener: Listener){
+        this.listener= newListener
+    }
     fun start(streamUrl: String, config: StreamConfig, onStreamStarted: (Stream) -> Unit) {
         // Configurar calidad del stream
         stream.audioSetting.bitRate = config.audioBitrate

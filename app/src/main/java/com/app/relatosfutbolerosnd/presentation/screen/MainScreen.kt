@@ -7,7 +7,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.UiComposable
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import com.app.relatosfutbolerosnd.service.RtmpStreamingService
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -28,6 +30,7 @@ fun MainScreen(
     onRequestOverlayPermission: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -55,6 +58,11 @@ fun MainScreen(
                 val surfaceView = HkSurfaceView(it)
                 // Se la entregamos al ViewModel para que el servicio la use
                 viewModel.setCameraView(surfaceView)
+                val intent = Intent(context, RtmpStreamingService::class.java).apply{
+                    action = RtmpStreamingService.ACTION_INIT_PREVIEW
+                }
+                context.startService(intent)
+
                 surfaceView
             }
         )

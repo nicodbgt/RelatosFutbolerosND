@@ -61,7 +61,8 @@
             android:theme="@style/Theme.NoDisplay" />
         <receiver
             android:name=".service.RtmpBroadcastReceiver"
-            android:exported="false" />
+            android:exported="false">
+        </receiver>
 
     </application>
 </manifest>

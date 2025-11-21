@@ -36,6 +36,7 @@ class RtmpStreamingService : Service(), RtmpClient.Listener {
         const val ACTION_STOP_STREAM = "STOP_STREAM"
         const val ACTION_SWITCH_CAMERA = "SWITCH_CAMERA"
         const val EXTRA_STREAM_CONFIG = "EXTRA_STREAM_CONFIG"
+        const val ACTION_INIT_PREVIEW = "INIT_PREVIEW"
 
         private val FOREGROUND_SERVICE_TYPES = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
@@ -62,6 +63,7 @@ class RtmpStreamingService : Service(), RtmpClient.Listener {
 
         intent?.let { incomingIntent ->
             when (incomingIntent.action) {
+                ACTION_INIT_PREVIEW -> handleInitPreview()
                 ACTION_START_STREAM -> handleStartStream(intent)
                 ACTION_STOP_STREAM -> handleStopStream()
                 ACTION_SWITCH_CAMERA -> handleSwitchCamera()
@@ -72,7 +74,11 @@ class RtmpStreamingService : Service(), RtmpClient.Listener {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
+    private fun handleInitPreview() {
+        if(surfaceView != null){
+            rtmpClient.initialize(surfaceView!!, this)
+        }
+    }
     private fun handleStartStream(intent: Intent) {
         if (surfaceView == null) {
             Log.e("RtmpStreamingService", "Error: No se puede iniciar el stream porque HkSurfaceView es nula.")
@@ -94,6 +100,9 @@ class RtmpStreamingService : Service(), RtmpClient.Listener {
             currentUrl = "${config.rtmpUrl}/${config.streamKey}"
 
             rtmpClient.initialize(surfaceView!!, this)
+
+            rtmpClient.updateListeener(this)
+
             rtmpClient.start(currentUrl, config) { stream ->
                 localStream = stream
                 startServiceWithNotification()
