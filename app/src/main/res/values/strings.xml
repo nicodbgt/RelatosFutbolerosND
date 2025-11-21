@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">RelatosFutbolerosND</string>
+
+    <!-- Estados de Streaming -->
+    <string name="stream_status_connected">Transmitiendo</string>
+    <string name="stream_status_disconnected">No conectado</string>
+    <string name="stream_status_connecting">Conectando...</string>
+    <string name="stream_status_error">Error de conexión</string>
+
+    <!-- Permisos -->
+    <string name="overlay_permission_title">Permiso de Overlay Requerido</string>
+    <string name="overlay_permission_message">Para mostrar el marcador durante las transmisiones, necesitas otorgar el permiso de overlay.</string>
+    <string name="overlay_permission_confirm">Configurar Permiso</string>
+    <string name="overlay_permission_cancel">Cancelar</string>
+
+    <string name="camera_permission_required">Se requieren permisos de cámara y micrófono para transmitir</string>
+    <string name="permission_denied">Permisos denegados. La aplicación no puede funcionar correctamente.</string>
+
+    <!-- Configuración -->
+    <string name="team_local">Equipo Local</string>
+    <string name="team_visitor">Equipo Visitante</string>
+    <string name="enter_stream_url">Ingresa URL RTMP</string>
+    <string name="start_stream">Iniciar Stream</string>
+    <string name="stop_stream">Detener Stream</string>
+    <string name="show_overlay">Mostrar Marcador</string>
+    <string name="hide_overlay">Ocultar Marcador</string>
+
+    <!-- Controles Partido -->
+    <string name="start_match">Iniciar Partido</string>
+    <string name="pause_match">Pausar Partido</string>
+    <string name="goal">Gol</string>
+</resources>
