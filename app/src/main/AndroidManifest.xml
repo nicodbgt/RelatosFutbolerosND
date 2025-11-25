@@ -54,15 +54,25 @@
             android:exported="false"
             android:permission="android.permission.SYSTEM_ALERT_WINDOW" />
 
-        <!-- Close Activity (del proyecto streaming) -->
-        <activity
-            android:name=".service.CloseActivity"
-            android:exported="false"
-            android:theme="@style/Theme.NoDisplay" />
+        <!--
+   CORRECCIÓN APLICADA:
+   Registramos el Receiver para escuchar el botón de la notificación
+-->
         <receiver
             android:name=".service.RtmpBroadcastReceiver"
-            android:exported="false">
-        </receiver>
+            android:exported="false" />
+
+        <!--
+           CORRECCIÓN APLICADA:
+           Registramos la Activity de cierre.
+           Usamos Theme.NoDisplay para que sea invisible al usuario.
+        -->
+        <activity
+            android:name=".service.CloseActivity"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:exported="false" />
 
     </application>
 </manifest>
