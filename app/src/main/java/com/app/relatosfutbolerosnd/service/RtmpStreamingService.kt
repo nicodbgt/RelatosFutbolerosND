@@ -6,16 +6,13 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.app.relatosfutbolerosnd.R
 import com.app.relatosfutbolerosnd.data.model.StreamConfig
-import com.app.relatosfutbolerosnd.service.RtmpClient
-import com.haishinkit.media.Stream
-import com.haishinkit.view.HkSurfaceView
+import com.app.relatosfutbolerosnd.presentation.screen.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,104 +21,76 @@ import javax.inject.Singleton
 @Singleton
 class RtmpStreamingService : Service(), RtmpClient.Listener {
 
-    companion object {
-        var surfaceView: HkSurfaceView? = null
-        var isServiceRunning = false
-        var isStreamOn = false
-        var listener: StreamingServiceListener? = null
-        var currentUrl = ""
-        var localStream: Stream? = null
-
-        const val ACTION_START_STREAM = "START_STREAM"
-        const val ACTION_STOP_STREAM = "STOP_STREAM"
-        const val ACTION_SWITCH_CAMERA = "SWITCH_CAMERA"
-        const val EXTRA_STREAM_CONFIG = "EXTRA_STREAM_CONFIG"
-        const val ACTION_INIT_PREVIEW = "INIT_PREVIEW"
-
-        private val FOREGROUND_SERVICE_TYPES = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-        } else {
-            0
-        }
-    }
-
-    private lateinit var notificationBuilder: NotificationCompat.Builder
-    private lateinit var notificationManager: NotificationManager
-
     @Inject
     lateinit var rtmpClient: RtmpClient
 
-    override fun onCreate() {
-        super.onCreate()
-        setupNotification()
-    }
+    companion object {
+        const val ACTION_START_STREAM = "ACTION_START_STREAM"
+        const val ACTION_STOP_STREAM = "ACTION_STOP_STREAM"
+        const val ACTION_SWITCH_CAMERA = "ACTION_SWITCH_CAMERA"
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        super.onStartCommand(intent, flags, startId)
+        const val CHANNEL_ID = "RtmpStreamChannel"
+        const val NOTIFICATION_ID = 1
+        private const val TAG = "RtmpStreamingService"
 
-        intent?.let { incomingIntent ->
-            when (incomingIntent.action) {
-                ACTION_INIT_PREVIEW -> handleInitPreview()
-                ACTION_START_STREAM -> handleStartStream(intent)
-                ACTION_STOP_STREAM -> handleStopStream()
-                ACTION_SWITCH_CAMERA -> handleSwitchCamera()
-            }
-        }
-
-        return START_STICKY
+        var isServiceRunning = false
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-    private fun handleInitPreview() {
-        if(surfaceView != null){
-            rtmpClient.initialize(surfaceView!!, this)
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = intent?.action
+        Log.d(TAG, "onStartCommand: $action")
+
+        when (action) {
+            ACTION_START_STREAM -> handleStartStream(intent)
+            ACTION_STOP_STREAM -> handleStopStream()
+            ACTION_SWITCH_CAMERA -> handleSwitchCamera()
         }
+
+        return START_NOT_STICKY
     }
+
     private fun handleStartStream(intent: Intent) {
-        if (surfaceView == null) {
-            Log.e("RtmpStreamingService", "Error: No se puede iniciar el stream porque HkSurfaceView es nula.")
-            listener?.onStreamError("La vista de la cámara no está lista.")
+        val streamUrl = intent.getStringExtra("stream_url")
+
+        if (streamUrl.isNullOrBlank()) {
+            Log.e(TAG, "Error: URL de stream vacía.")
             stopSelf()
             return
         }
 
         if (!isServiceRunning) {
+            Log.d(TAG, "Iniciando servicio de streaming...")
             isServiceRunning = true
 
-            val config = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                intent.getParcelableExtra(EXTRA_STREAM_CONFIG, StreamConfig::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                intent.getParcelableExtra(EXTRA_STREAM_CONFIG)
-            } ?: StreamConfig()
+            startServiceWithNotification()
 
-            currentUrl = "${config.rtmpUrl}/${config.streamKey}"
+            val config = StreamConfig(
+                videoWidth = 720,
+                videoHeight = 1280,
+                videoBitrate = 2500 * 1000,
+                audioBitrate = 128 * 1000
+            )
 
-            rtmpClient.initialize(surfaceView!!, this)
+            rtmpClient.setListener(this)
 
-            rtmpClient.updateListeener(this)
-
-            rtmpClient.start(currentUrl, config) { stream ->
-                localStream = stream
-                startServiceWithNotification()
-            }
-
-            listener?.onStreamStarted()
+            // CORRECCIÓN: La lambda final se ha eliminado.
+            rtmpClient.start(streamUrl, config)
         }
     }
 
-    fun handleStopStream() {
-        stopForeground(STOP_FOREGROUND_REMOVE)
+    private fun handleStopStream() {
+        Log.d(TAG, "Deteniendo servicio...")
+        try {
+            rtmpClient.stop()
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deteniendo cliente", e)
+        }
+
         isServiceRunning = false
-        isStreamOn = false
-
-        rtmpClient.stop()
-        // NO anular la vista, la UI sigue siendo la propietaria
-        // surfaceView = null 
-
-        listener?.onStreamStopped()
+        stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
@@ -129,65 +98,60 @@ class RtmpStreamingService : Service(), RtmpClient.Listener {
         rtmpClient.switchCamera()
     }
 
-    private fun setupNotification() {
-        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private fun startServiceWithNotification() {
+        createNotificationChannel()
 
-        val notificationChannel = NotificationChannel(
-            "streaming_channel",
-            "Transmisión en Vivo",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Notificación para transmisión RTMP en vivo"
-        }
-
-        val exitIntent = Intent(this, RtmpBroadcastReceiver::class.java).apply {
-            action = RtmpBroadcastReceiver.ACTION_EXIT
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            this, 0, exitIntent, PendingIntent.FLAG_IMMUTABLE
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        notificationManager.createNotificationChannel(notificationChannel)
+        val stopIntent = Intent(this, RtmpBroadcastReceiver::class.java).apply {
+            action = ACTION_STOP_STREAM
+        }
+        val stopPendingIntent = PendingIntent.getBroadcast(
+            this, 0, stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
-        notificationBuilder = NotificationCompat.Builder(this, "streaming_channel")
-            .setSmallIcon(R.drawable.ic_sports_soccer)
-            .setContentTitle("Relatos Futboleros")
-            .setContentText("Transmitiendo en vivo")
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Transmitiendo en vivo")
+            .setContentText("Relatos Futboleros está en directo 🔴")
+            .setSmallIcon(R.drawable.ic_live_tv)
+            .setContentIntent(pendingIntent)
+            .addAction(R.drawable.ic_stop, "Finalizar", stopPendingIntent)
             .setOngoing(true)
-            .addAction(R.drawable.ic_stop, "Finalizar", pendingIntent)
+            .build()
+
+        startForeground(NOTIFICATION_ID, notification)
     }
 
-    @Suppress("DEPRECATION")
-    private fun startServiceWithNotification() {
-        val notification = notificationBuilder.build()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(1, notification, FOREGROUND_SERVICE_TYPES)
-        } else {
-            startForeground(1, notification)
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val serviceChannel = NotificationChannel(
+                CHANNEL_ID,
+                "Canal de Streaming RTMP",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(serviceChannel)
         }
     }
 
-    // Callbacks del cliente RTMP
+    // --- Implementación de RtmpClient.Listener ---
+
     override fun onStreamConnected() {
-        isStreamOn = true
-        listener?.onStreamConnected()
+        Log.d(TAG, "Conexión RTMP exitosa")
     }
 
     override fun onStreamClosed() {
-        isStreamOn = false
-        listener?.onStreamClosed()
+        Log.d(TAG, "Conexión RTMP cerrada")
+        handleStopStream()
     }
 
     override fun onStreamError(error: String) {
-        listener?.onStreamError(error)
-    }
-
-    interface StreamingServiceListener {
-        fun onStreamStarted()
-        fun onStreamStopped()
-        fun onStreamConnected()
-        fun onStreamClosed()
-        fun onStreamError(error: String)
+        Log.e(TAG, "Error de RTMP: $error")
+        handleStopStream()
     }
 }

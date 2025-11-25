@@ -30,6 +30,10 @@ class MatchOverlayService : Service() {
         const val ACTION_STOP_OVERLAY = "STOP_OVERLAY"
         const val ACTION_UPDATE_SCORE = "UPDATE_SCORE"
         const val ACTION_UPDATE_TIME = "UPDATE_TIME"
+        const val ACTION_START_MATCH = "ACTION_START_MATCH"
+        const val ACTION_PAUSE_MATCH = "ACTION_PAUSE_MATCH"
+        const val ACTION_RESET_MATCH = "ACTION_RESET_MATCH"
+
         const val EXTRA_TEAM1 = "EXTRA_TEAM1"
         const val EXTRA_TEAM2 = "EXTRA_TEAM2"
         const val EXTRA_TEAM1_SCORE = "EXTRA_TEAM1_SCORE"
@@ -47,15 +51,12 @@ class MatchOverlayService : Service() {
 
     private var timer: Timer? = null
     private var seconds = 0
-    var isPaused = true  // Inicia pausado por defecto
-        private set
+    private var isPaused = true
 
     private var team1Name = "Equipo 1"
     private var team2Name = "Equipo 2"
-    var team1Score = 0
-        private set
-    var team2Score = 0
-        private set
+    private var team1Score = 0
+    private var team2Score = 0
     private var isMenuOpen = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -72,14 +73,18 @@ class MatchOverlayService : Service() {
                 team1Score = intent.getIntExtra(EXTRA_TEAM1_SCORE, team1Score)
                 team2Score = intent.getIntExtra(EXTRA_TEAM2_SCORE, team2Score)
                 updateScoreText()
+                notifyScoreUpdate()
             }
             ACTION_UPDATE_TIME -> {
                 val time = intent.getStringExtra(EXTRA_MATCH_TIME)
                 time?.let { updateTimerText(it) }
             }
+            ACTION_START_MATCH -> startTimer()
+            ACTION_PAUSE_MATCH -> pauseTimer()
+            ACTION_RESET_MATCH -> resetMatch()
         }
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     @Suppress("DEPRECATION")
@@ -111,7 +116,7 @@ class MatchOverlayService : Service() {
     private fun createOverlayView(): View {
         val overlay = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.parseColor("#CC000000"))  // Más transparente para streaming
+            setBackgroundColor(Color.parseColor("#CC000000"))
             setPadding(dpToPx(16), dpToPx(8), dpToPx(16), dpToPx(8))
             gravity = Gravity.CENTER_VERTICAL
         }
@@ -153,7 +158,6 @@ class MatchOverlayService : Service() {
         }
     }
 
-    @SuppressLint("InflateParams")
     private fun showDropdownMenu() {
         if (dropdownMenuView != null) return
 
@@ -161,9 +165,7 @@ class MatchOverlayService : Service() {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -236,46 +238,50 @@ class MatchOverlayService : Service() {
     }
 
     private fun startTimer() {
-        if (timer != null) return
+        if (!isPaused) return
         isPaused = false
-        timer = Timer()
-        val handler = Handler(Looper.getMainLooper())
 
-        timer?.scheduleAtFixedRate(timerTask {
-            if (!isPaused) {
-                seconds++
-                val minutes = seconds / 60
-                val remaining = seconds % 60
-                handler.post {
-                    timerTextView.text = String.format("%02d:%02d", minutes, remaining)
-                    listener?.onTimeUpdated(String.format("%02d:%02d", minutes, remaining))
+        if (timer == null) {
+            timer = Timer()
+            val handler = Handler(Looper.getMainLooper())
+            timer?.scheduleAtFixedRate(timerTask {
+                if (!isPaused) {
+                    seconds++
+                    val minutes = seconds / 60
+                    val remaining = seconds % 60
+                    handler.post {
+                        val timeString = String.format("%02d:%02d", minutes, remaining)
+                        updateTimerText(timeString)
+                        listener?.onTimeUpdated(timeString)
+                    }
                 }
-            }
-        }, 0, 1000)
+            }, 0, 1000)
+        }
 
         playPauseMenuItem?.text = "⏸️ Pausar"
         listener?.onMatchStarted()
     }
 
     private fun pauseTimer() {
+        if(isPaused) return
         isPaused = true
         playPauseMenuItem?.text = "▶ Reanudar"
         listener?.onMatchPaused()
     }
 
     private fun resetMatch() {
+        timer?.cancel()
+        timer = null
         seconds = 0
         team1Score = 0
         team2Score = 0
         isPaused = true
 
-        timer?.cancel()
-        timer = null
-
-        timerTextView.text = "00:00"
+        updateTimerText("00:00")
         updateScoreText()
         playPauseMenuItem?.text = "▶ Iniciar"
         listener?.onMatchReset()
+        notifyScoreUpdate()
     }
 
     @SuppressLint("SetTextI18n")
@@ -296,17 +302,12 @@ class MatchOverlayService : Service() {
     }
 
     private fun stopOverlay() {
+        timer?.cancel()
+        timer = null
         if (::overlayView.isInitialized && overlayView.windowToken != null) {
             windowManager.removeView(overlayView)
         }
         hideDropdownMenu()
-
-        timer?.cancel()
-        timer = null
-        seconds = 0
-        team1Score = 0
-        team2Score = 0
-        isPaused = true
 
         isServiceRunning = false
         listener?.onOverlayStopped()

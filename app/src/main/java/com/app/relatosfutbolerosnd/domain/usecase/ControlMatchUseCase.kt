@@ -12,5 +12,5 @@ class ControlMatchUseCase @Inject constructor(
     suspend fun resetMatch() = matchRepository.resetMatch()
     suspend fun updateScore(team1Score: Int, team2Score: Int) =
         matchRepository.updateScore(team1Score, team2Score)
-    suspend fun getMatchInfo() = matchRepository.getMatchInfo()
+//    suspend fun getMatchInfo() = matchRepository.getMatchInfo()
 }

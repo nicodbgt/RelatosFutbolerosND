@@ -4,15 +4,15 @@ import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.util.Log
 import com.app.relatosfutbolerosnd.data.model.StreamConfig
-import com.haishinkit.event.Event
-import com.haishinkit.event.IEventListener
-import com.haishinkit.media.AudioRecordSource
 import com.haishinkit.media.AudioSource
 import com.haishinkit.media.Camera2Source
 import com.haishinkit.media.Stream
+import com.haishinkit.view.HkSurfaceView
+import com.haishinkit.event.Event
+import com.haishinkit.event.IEventListener
+import com.haishinkit.media.AudioRecordSource
 import com.haishinkit.rtmp.RtmpConnection
 import com.haishinkit.rtmp.RtmpStream
-import com.haishinkit.view.HkSurfaceView
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,89 +21,109 @@ class RtmpClient @Inject constructor(
     private val context: Context
 ) : IEventListener {
 
-    private lateinit var connection: RtmpConnection
-    private lateinit var stream: RtmpStream
-    private lateinit var videoSource: Camera2Source
-    private lateinit var audioSource: AudioSource
-    private lateinit var surfaceView: HkSurfaceView
-
+    private var connection: RtmpConnection? = null
+    private var stream: RtmpStream? = null
+    private var videoSource: Camera2Source? = null
+    private var audioSource: AudioSource? = null
+    private var surfaceView: HkSurfaceView? = null
     private var listener: Listener? = null
-    private var isInitialize = false
+    private var isStreaming = false
 
-    fun initialize(surfaceView: HkSurfaceView, listener: Listener) {
+    private fun initialize() {
+        if (connection == null) {
+            connection = RtmpConnection().apply {
+                addEventListener(Event.RTMP_STATUS, this@RtmpClient)
+            }
+        }
+        if (stream == null) {
+            stream = RtmpStream(context, connection!!)
+        }
+        if (audioSource == null) {
+            audioSource = AudioRecordSource(context)
+            stream?.attachAudio(audioSource)
+        }
+        if (videoSource == null) {
+            videoSource = Camera2Source(context)
+            stream?.attachVideo(videoSource)
+        }
+    }
 
-        if(isInitialize) return
-
-        this.surfaceView = surfaceView
+    fun setListener(listener: Listener?) {
         this.listener = listener
+    }
 
-        connection = RtmpConnection()
-        stream = RtmpStream(context, connection)
+    fun startPreview(surfaceView: HkSurfaceView, facing: Int = CameraCharacteristics.LENS_FACING_BACK) {
+        this.surfaceView = surfaceView
+        initialize()
+        videoSource?.open(facing)
+        this.surfaceView?.attachStream(stream)
+    }
 
-        videoSource = Camera2Source(context).apply {
-            open(CameraCharacteristics.LENS_FACING_BACK)
+    fun stopPreview() {
+        surfaceView?.attachStream(null)
+        surfaceView = null
+        videoSource?.close()
+    }
+
+    fun start(streamUrl: String, config: StreamConfig) {
+        isStreaming = true
+        initialize()
+        stream?.apply {
+            audioSetting.bitRate = config.audioBitrate
+            videoSetting.width = config.videoWidth
+            videoSetting.height = config.videoHeight
+            videoSetting.bitRate = config.videoBitrate
         }
 
-        audioSource = AudioRecordSource(context)
-
-        // Configurar y conectar fuentes
-        stream.attachAudio(audioSource)
-        stream.attachVideo(videoSource)
-        connection.addEventListener(Event.RTMP_STATUS, this)
-        surfaceView.attachStream(stream)
-        isInitialize = true
-    }
-    fun updateListeener(newListener: Listener){
-        this.listener= newListener
-    }
-    fun start(streamUrl: String, config: StreamConfig, onStreamStarted: (Stream) -> Unit) {
-        // Configurar calidad del stream
-        stream.audioSetting.bitRate = config.audioBitrate
-        stream.videoSetting.width = config.videoWidth
-        stream.videoSetting.height = config.videoHeight
-        stream.videoSetting.bitRate = config.videoBitrate
-
-        // Conectar y publicar
         val baseUrl = streamUrl.substringBeforeLast("/")
         val streamKey = streamUrl.substringAfterLast("/")
 
-        connection.connect(baseUrl)
-        stream.publish(streamKey)
-        onStreamStarted.invoke(stream)
+        connection?.connect(baseUrl)
+        stream?.publish(streamKey)
     }
 
     fun stop() {
+        if (!isStreaming) return
+        isStreaming = false
         try {
-            videoSource.close()
-            audioSource.stopRunning()
-            stream.close()
-            connection.close()
+            connection?.close()
+            // Don't close the stream here if you want to reuse it.
+            // stream?.close()
         } catch (e: Exception) {
             Log.e("RtmpClient", "Error stopping stream", e)
         }
     }
 
     fun switchCamera() {
-        videoSource.switchCamera()
+        videoSource?.switchCamera()
     }
 
     override fun handleEvent(event: Event) {
         Log.d("RtmpClient", "Event: ${event.type} Data: ${event.data}")
 
-        when {
-            event.data.toString().contains("code=NetConnection.Connect.Success")
-                    && event.type == "rtmpStatus" -> {
+        val data = event.data as? Map<*, *>
+        when (data?.get("code")) {
+            "NetConnection.Connect.Success" -> {
                 listener?.onStreamConnected()
             }
-            event.data.toString().contains("code=NetConnection.Connect.Closed")
-                    && event.type == "rtmpStatus" -> {
+            "NetConnection.Connect.Closed" -> {
                 listener?.onStreamClosed()
             }
-            event.data.toString().contains("code=NetConnection.Connect.Failed")
-                    && event.type == "rtmpStatus" -> {
+            "NetConnection.Connect.Failed" -> {
                 listener?.onStreamError("Error de conexión RTMP")
             }
         }
+    }
+
+    fun release() {
+        videoSource?.close()
+        videoSource = null
+        audioSource?.stopRunning()
+        audioSource = null
+        stream?.close()
+        stream = null
+        connection?.close()
+        connection = null
     }
 
     interface Listener {

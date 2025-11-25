@@ -7,8 +7,8 @@ data class StreamingUiState(
     val streamStatus: String = "No conectado",
 
     // Configuración Partido
-    val team1Name: String = " ",
-    val team2Name: String = " ",
+    val team1Name: String = "",
+    val team2Name: String = "",
     val team1Score: Int = 0,
     val team2Score: Int = 0,
     val matchTime: String = "00:00",

@@ -68,7 +68,7 @@ fun MatchConfigurationSection(
                 OutlinedTextField(
                     value = team1,
                     onValueChange = onTeam1Change,
-                    label = { Text("Equipo Local") },
+                    label = { Text("Local") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     isError = team1Error != null,
@@ -90,7 +90,7 @@ fun MatchConfigurationSection(
                 OutlinedTextField(
                     value = team2,
                     onValueChange = onTeam2Change,
-                    label = { Text("Equipo Visitante") },
+                    label = { Text("Visitante") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     isError = team2Error != null,

@@ -2,12 +2,13 @@ package com.app.relatosfutbolerosnd.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.app.relatosfutbolerosnd.data.model.MatchInfo
 import com.app.relatosfutbolerosnd.data.model.StreamConfig
 import com.app.relatosfutbolerosnd.data.model.StreamingUiState
 import com.app.relatosfutbolerosnd.domain.usecase.ControlMatchUseCase
 import com.app.relatosfutbolerosnd.domain.usecase.OverlayUseCase
 import com.app.relatosfutbolerosnd.domain.usecase.StartStreamUseCase
-import com.app.relatosfutbolerosnd.service.RtmpStreamingService
+import com.app.relatosfutbolerosnd.service.RtmpClient
 import com.haishinkit.view.HkSurfaceView
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,19 +22,21 @@ import javax.inject.Inject
 class StreamingViewModel @Inject constructor(
     private val startStreamUseCase: StartStreamUseCase,
     private val controlMatchUseCase: ControlMatchUseCase,
-    private val overlayUseCase: OverlayUseCase
+    private val overlayUseCase: OverlayUseCase,
+    private val rtmpClient: RtmpClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StreamingUiState())
     val uiState: StateFlow<StreamingUiState> = _uiState.asStateFlow()
 
-    // 🎥 ASIGNAR VISTA DE LA CÁMARA
-    fun setCameraView(surfaceView: HkSurfaceView) {
-        // Asignamos la vista de la cámara al servicio para que pueda usarla
-        RtmpStreamingService.surfaceView = surfaceView
+    fun startCameraPreview(surfaceView: HkSurfaceView) {
+        rtmpClient.startPreview(surfaceView)
     }
 
-    // 🎯 ACTUALIZACIONES DE CONFIGURACIÓN
+    fun stopCameraPreview() {
+        rtmpClient.stopPreview()
+    }
+
     fun updateTeam1(name: String) {
         _uiState.update { it.copy(team1Name = name, team1Error = null) }
     }
@@ -46,20 +49,16 @@ class StreamingViewModel @Inject constructor(
         _uiState.update { it.copy(streamUrl = url, streamUrlError = null) }
     }
 
-    // 📹 CONTROL DE STREAMING
     fun startStreaming() {
         val state = _uiState.value
         var hasError = false
 
-        // 1. Validar Equipo 1
         val team1Error = if (state.team1Name.isBlank()) "Ingresa el nombre del equipo" else null
         if (team1Error != null) hasError = true
 
-        // 2. Validar Equipo 2
         val team2Error = if (state.team2Name.isBlank()) "Ingresa el nombre del equipo" else null
         if (team2Error != null) hasError = true
 
-        // 3. Validar URL
         val urlError = if (state.streamUrl.isBlank()) {
             "La URL es obligatoria"
         } else if (!state.streamUrl.startsWith("rtmp://") && !state.streamUrl.startsWith("rtmps://")) {
@@ -69,7 +68,6 @@ class StreamingViewModel @Inject constructor(
         }
         if (urlError != null) hasError = true
 
-        // Si hay errores, actualizamos el estado y CANCELAMOS el inicio
         if (hasError) {
             _uiState.update { it.copy(
                 team1Error = team1Error,
@@ -78,6 +76,7 @@ class StreamingViewModel @Inject constructor(
             )}
             return
         }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
@@ -119,14 +118,12 @@ class StreamingViewModel @Inject constructor(
                 )
             }
 
-            // Ocultar overlay al detener stream
             if (_uiState.value.isOverlayVisible) {
                 toggleOverlay()
             }
         }
     }
 
-    // ⚽ CONTROL DE PARTIDO
     fun startMatch() {
         viewModelScope.launch {
             controlMatchUseCase.startMatch().onSuccess {
@@ -161,7 +158,6 @@ class StreamingViewModel @Inject constructor(
         }
     }
 
-    // 🖥️ CONTROL DE OVERLAY
     fun toggleOverlay() {
         viewModelScope.launch {
             if (_uiState.value.isOverlayVisible) {
@@ -169,9 +165,18 @@ class StreamingViewModel @Inject constructor(
                     _uiState.update { it.copy(isOverlayVisible = false) }
                 }
             } else {
-                // Verificar permisos primero
                 if (overlayUseCase.checkPermission()) {
-                    overlayUseCase.showOverlay().onSuccess {
+                    // Creamos el objeto MatchInfo con el estado actual
+                    val matchInfo = MatchInfo(
+                        team1Name = _uiState.value.team1Name,
+                        team2Name = _uiState.value.team2Name,
+                        team1Score = _uiState.value.team1Score,
+                        team2Score = _uiState.value.team2Score,
+                        matchTime = _uiState.value.matchTime,
+                        isMatchRunning = _uiState.value.isMatchRunning
+                    )
+                    // Y se lo pasamos al caso de uso
+                    overlayUseCase.showOverlay(matchInfo).onSuccess {
                         _uiState.update { it.copy(isOverlayVisible = true) }
                     }
                 } else {
@@ -181,7 +186,6 @@ class StreamingViewModel @Inject constructor(
         }
     }
 
-    // 🧹 LIMPIAR ERRORES
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
